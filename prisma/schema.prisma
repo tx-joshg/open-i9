@@ -1,0 +1,186 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model PortalConfig {
+  id                       Int      @id @default(1)
+  businessName             String   @default("My Company")
+  logoFileKey              String?
+  primaryColor             String   @default("#1d4ed8")
+  accentColor              String   @default("#f59e0b")
+  notificationEmails       String   @default("[]") // JSON: [{email, label}]
+  footerText               String   @default("")
+  welcomeMessage           String   @default("")
+  sendEmployeeConfirmation Boolean  @default(false)
+  useEVerify               Boolean? // null = not configured, true = yes, false = no
+  inviteLinkExpiryDays     Int      @default(7)
+  employerName             String   @default("")
+  employerTitle            String   @default("")
+  employerBusinessName     String   @default("")
+  employerBusinessAddress  String   @default("")
+  i9FormFileKey            String?  // uploaded blank I-9 PDF
+  i9FieldMapping           String   @default("{}") // JSON: field name mapping
+  updatedAt                DateTime @updatedAt
+}
+
+model IntegrationConfig {
+  id                    String    @id @default(cuid())
+  platform              String // "quickbooks" | "xero" | "zoho" | "freshbooks"
+  isConnected           Boolean   @default(false)
+  defaultRecordType     String    @default("employee") // "employee" | "vendor"
+
+  // Admin-provided OAuth credentials (AES-256 encrypted with DATA_ENCRYPTION_KEY)
+  encryptedClientId     String?
+  encryptedClientSecret String?
+  environment           String?   // QB: "sandbox" | "production"; Zoho: region "US"|"EU"|"IN"|"AU"|"JP"
+
+  // OAuth tokens (AES-256 encrypted with per-integration key derived from DATA_ENCRYPTION_KEY)
+  encryptedAccessToken  String?
+  encryptedRefreshToken String?
+  tokenExpiresAt        DateTime?
+
+  // Platform-specific identifiers
+  realmId               String? // QB: realmId, Xero: tenantId, Zoho: organization_id
+  accountId             String? // FreshBooks: accountId
+
+  connectedAt           DateTime?
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([platform])
+}
+
+model Invite {
+  id           String    @id @default(cuid())
+  token        String    @unique @default(cuid())
+  emailHint    String?   // optional: who this invite is for (display only)
+  nameHint     String?   // optional: employee name hint
+  expiresAt    DateTime
+  usedAt       DateTime?
+  employeeId   String?   // linked after submission
+  employee     Employee? @relation(fields: [employeeId], references: [id])
+  workerType   String    @default("employee") // employee | contractor
+  isRenewal    Boolean   @default(false) // true if this invite is for reverification
+  createdAt    DateTime  @default(now())
+
+  @@index([token])
+}
+
+model Employee {
+  id           String       @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String
+  phone        String?
+  workerType   String       @default("employee") // employee | contractor
+  status       String       @default("active") // active | inactive | terminated
+  hireDate     DateTime?    // "Engagement date" for contractors
+  terminatedAt DateTime?    // "End of engagement" for contractors
+  notes        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  submissions  Submission[]
+  invites      Invite[]
+
+  @@index([email])
+  @@index([status])
+}
+
+model Submission {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Link to employee roster
+  employeeId String?
+  employee   Employee? @relation(fields: [employeeId], references: [id])
+  isRenewal  Boolean   @default(false)
+
+  // Section 1 — Personal (PII fields encrypted at application layer)
+  firstName            String  // kept plain for admin search/display
+  lastName             String  // kept plain for admin search/display
+  middleInitial        String?
+  otherLastNames       String?
+  encryptedAddress     String  // AES-256 encrypted
+  encryptedAptUnit     String? // AES-256 encrypted
+  encryptedCity        String  // AES-256 encrypted
+  state                String
+  encryptedZip         String  // AES-256 encrypted
+  encryptedDob         String  // AES-256 encrypted (ISO date string)
+  encryptedSsn         String? // AES-256 encrypted (full SSN for I-9 PDF)
+  encryptedSsnLast4    String? // AES-256 encrypted (last 4 for admin display)
+  encryptedEmail       String  // AES-256 encrypted
+  encryptedPhone       String? // AES-256 encrypted
+
+  // Section 1 — Eligibility
+  citizenshipStatus        String // usCitizen | usnational | lpr | authorized
+  encryptedAlienRegNumber  String? // AES-256 encrypted
+  encryptedI94Number       String? // AES-256 encrypted
+  encryptedForeignPassport String? // AES-256 encrypted
+  passportCountry          String?
+  authExpDate              DateTime?
+  encryptedSignatureDataUrl String? // AES-256 encrypted PNG data URL
+  signatureDate            DateTime
+
+  // Documents
+  docChoice     String // listA | listBC
+  listADoc      String?
+  listADocNumber String?
+  listAExpDate  DateTime?
+  listAFileKey  String?
+  listAIssuingAuthority String?
+  listBDoc      String?
+  listBDocNumber String?
+  listBExpDate  DateTime?
+  listBFileKey  String?
+  listBIssuingAuthority String?
+  listCDoc      String?
+  listCDocNumber String?
+  listCExpDate  DateTime?
+  listCFileKey  String?
+  listCIssuingAuthority String?
+
+  // Admin
+  status      String    @default("pending_review")
+  adminNotes  String?
+  emailSentAt DateTime?
+
+  // Renewal tracking
+  nextRenewalDate DateTime? // earliest doc expiration or auth expiration
+
+  // QuickBooks sync
+  qbRecordId     String?
+  qbRecordType   String?
+  qbSyncStatus   String?
+  qbSyncedAt     DateTime?
+  qbSyncError    String?
+
+  // Xero sync
+  xeroRecordId   String?
+  xeroRecordType String?
+  xeroSyncStatus String?
+  xeroSyncedAt   DateTime?
+  xeroSyncError  String?
+
+  // Zoho sync
+  zohoRecordId   String?
+  zohoRecordType String?
+  zohoSyncStatus String?
+  zohoSyncedAt   DateTime?
+  zohoSyncError  String?
+
+  // FreshBooks sync
+  fbRecordId     String?
+  fbRecordType   String?
+  fbSyncStatus   String?
+  fbSyncedAt     DateTime?
+  fbSyncError    String?
+
+  @@index([employeeId])
+  @@index([nextRenewalDate])
+}
