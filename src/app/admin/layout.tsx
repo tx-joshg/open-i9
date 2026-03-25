@@ -271,7 +271,8 @@ export default function AdminLayout({
 
   function handleAuth(sessionToken: string) {
     sessionStorage.setItem("adminToken", sessionToken);
-    document.cookie = `admin_token=${encodeURIComponent(sessionToken)}; path=/; SameSite=Strict`;
+    const secure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `admin_token=${encodeURIComponent(sessionToken)}; path=/; SameSite=Strict${secure}`;
     setToken(sessionToken);
     setSetupComplete(true);
   }

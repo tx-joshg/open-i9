@@ -135,7 +135,7 @@ export default function FileUpload({
       {/* Preview */}
       {fileKey && !uploading && (
         <div className="relative flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
-          {preview?.type === "image" ? (
+          {preview?.type === "image" && preview.url.startsWith("blob:") ? (
             <img src={preview.url} alt="Document preview" className="w-16 h-16 object-cover rounded" />
           ) : (
             <div className="w-16 h-16 flex items-center justify-center rounded bg-red-100">
