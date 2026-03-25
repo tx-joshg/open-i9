@@ -1,0 +1,64 @@
+name: Bug Report
+description: Report something that isn't working correctly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the sections below so we can reproduce and fix the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: "When I click Approve on a submission, I get a 500 error..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this?
+      placeholder: |
+        1. Go to /admin/submissions
+        2. Click on a pending submission
+        3. Select "Approved" and enter a hire date
+        4. Click "Update Status"
+        5. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How are you running Open I-9?
+      options:
+        - npm run dev (local)
+        - Docker Compose
+        - Railway
+        - Vercel
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      placeholder: "18.17.0"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error logs or screenshots
+      description: Paste any relevant error messages or attach screenshots.
