@@ -3,11 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { decryptSubmissionPii } from "@/lib/pii";
 import { deleteFile } from "@/lib/storage";
-
-function isAuthorized(request: Request): boolean {
-  const auth = request.headers.get("authorization");
-  return auth === `Bearer ${process.env.ADMIN_SECRET}`;
-}
+import { isAuthorized } from "@/lib/auth";
 
 const submissionPatchSchema = z.object({
   status: z.enum(["pending_review", "approved", "rejected"]).optional(),
@@ -25,7 +21,7 @@ interface RouteContext {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -57,7 +53,7 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

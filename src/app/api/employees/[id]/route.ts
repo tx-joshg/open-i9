@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-
-function isAuthorized(request: Request): boolean {
-  const auth = request.headers.get("authorization");
-  return auth === `Bearer ${process.env.ADMIN_SECRET}`;
-}
+import { isAuthorized } from "@/lib/auth";
 
 const employeePatchSchema = z.object({
   firstName: z.string().min(1).optional(),
@@ -23,7 +19,7 @@ interface RouteContext {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -63,7 +59,7 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -132,7 +128,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

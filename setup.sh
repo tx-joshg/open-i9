@@ -1,12 +1,12 @@
 #!/bin/bash
-# I-9 Collector — First-time setup
+# Open I-9 — First-time setup
 # Run this once after cloning: ./setup.sh
 
 set -e
 
 echo ""
 echo "========================================="
-echo "  I-9 Collector — Setup"
+echo "  Open I-9 — Setup"
 echo "========================================="
 echo ""
 
@@ -47,19 +47,6 @@ if [ ! -f ".env" ]; then
     sed -i "s/^DATA_ENCRYPTION_KEY=\"\"/DATA_ENCRYPTION_KEY=\"$ENCRYPTION_KEY\"/" .env
   fi
 
-  # Prompt for admin password
-  echo ""
-  read -p "Choose an admin password (used to log into the dashboard): " ADMIN_PW
-  if [ -z "$ADMIN_PW" ]; then
-    ADMIN_PW="admin"
-    echo "No password entered — defaulting to 'admin'. Change this before going to production."
-  fi
-  if [ "$(uname)" = "Darwin" ]; then
-    sed -i '' "s/^ADMIN_SECRET=\"change-me-to-a-strong-secret\"/ADMIN_SECRET=\"$ADMIN_PW\"/" .env
-  else
-    sed -i "s/^ADMIN_SECRET=\"change-me-to-a-strong-secret\"/ADMIN_SECRET=\"$ADMIN_PW\"/" .env
-  fi
-
   echo "Environment configured with SQLite (local dev database)."
   echo "Encryption key generated automatically."
 else
@@ -79,12 +66,7 @@ echo "========================================="
 echo ""
 echo "  Start the app:    npm run dev"
 echo ""
-echo "  Then open:"
-echo "    Employee form:  http://localhost:3000"
-echo "    Admin panel:    http://localhost:3000/admin"
-echo ""
-echo "  First time in admin:"
-echo "    1. Log in with your admin password"
-echo "    2. Go to Config — set E-Verify and employer info"
-echo "    3. Go to Invites — create a link for your first employee"
+echo "  Then open http://localhost:3000/admin"
+echo "  to create your admin account and"
+echo "  configure your portal."
 echo ""

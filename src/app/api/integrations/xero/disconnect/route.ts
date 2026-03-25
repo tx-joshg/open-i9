@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
 import { disconnect } from "@/lib/integrations/xero";
-
-function isAuthorized(request: Request): boolean {
-  const auth = request.headers.get("authorization");
-  return auth === `Bearer ${process.env.ADMIN_SECRET}`;
-}
+import { isAuthorized } from "@/lib/auth";
 
 export async function DELETE(request: Request) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -23,7 +23,130 @@ function AdminNavLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-function LoginForm({ onLogin }: { onLogin: (secret: string) => void }) {
+function SetupForm({ onSetup }: { onSetup: (token: string) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "setup", email, password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Setup failed.");
+        return;
+      }
+
+      onSetup(data.sessionToken);
+    } catch {
+      setError("Could not connect to server.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="w-full max-w-md">
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
+            Welcome to Open I-9
+          </h1>
+          <p className="text-sm text-gray-500 text-center mb-6">
+            Create your admin account to get started.
+          </p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="setup-email" className="block text-sm font-medium text-gray-700 mb-1">
+                Email Address
+              </label>
+              <input
+                id="setup-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900"
+                placeholder="admin@yourcompany.com"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="setup-password" className="block text-sm font-medium text-gray-700 mb-1">
+                Password
+              </label>
+              <input
+                id="setup-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900"
+                placeholder="Minimum 8 characters"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="setup-confirm" className="block text-sm font-medium text-gray-700 mb-1">
+                Confirm Password
+              </label>
+              <input
+                id="setup-confirm"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={8}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900"
+                placeholder="Confirm your password"
+              />
+            </div>
+
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !email || !password || !confirmPassword}
+              className="w-full py-2 px-4 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {loading ? "Creating Account..." : "Create Admin Account"}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoginForm({ onLogin }: { onLogin: (token: string) => void }) {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -34,14 +157,19 @@ function LoginForm({ onLogin }: { onLogin: (secret: string) => void }) {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/submissions", {
-        headers: { Authorization: `Bearer ${password}` },
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "login", email, password }),
       });
-      if (res.status === 401) {
-        setError("Invalid admin secret.");
-      } else {
-        onLogin(password);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Login failed.");
+        return;
       }
+
+      onLogin(data.sessionToken);
     } catch {
       setError("Could not connect to server.");
     } finally {
@@ -57,25 +185,37 @@ function LoginForm({ onLogin }: { onLogin: (secret: string) => void }) {
             Admin Login
           </h1>
           <p className="text-sm text-gray-500 text-center mb-6">
-            Enter the admin secret to continue.
+            Sign in to manage your I-9 portal.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label
-                htmlFor="admin-password"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Admin Secret
+              <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">
+                Email
               </label>
               <input
-                id="admin-password"
+                id="login-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900"
+                placeholder="admin@yourcompany.com"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">
+                Password
+              </label>
+              <input
+                id="login-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900"
-                placeholder="Enter admin secret"
+                placeholder="Enter your password"
               />
             </div>
 
@@ -87,10 +227,10 @@ function LoginForm({ onLogin }: { onLogin: (secret: string) => void }) {
 
             <button
               type="submit"
-              disabled={loading || !password}
+              disabled={loading || !email || !password}
               className="w-full py-2 px-4 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? "Verifying..." : "Sign In"}
+              {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
         </div>
@@ -104,25 +244,39 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [secret, setSecret] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [setupComplete, setSetupComplete] = useState<boolean | null>(null);
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("adminSecret");
-    if (stored) {
-      setSecret(stored);
+    async function init() {
+      // Check if setup is complete
+      try {
+        const res = await fetch("/api/auth");
+        const data = await res.json();
+        setSetupComplete(data.setupComplete);
+      } catch {
+        setSetupComplete(false);
+      }
+
+      // Check for stored session
+      const stored = sessionStorage.getItem("adminToken");
+      if (stored) {
+        setToken(stored);
+      }
+      setChecked(true);
     }
-    setChecked(true);
+    init();
   }, []);
 
-  function handleLogin(value: string) {
-    sessionStorage.setItem("adminSecret", value);
-    // Set cookie so browser-initiated requests (img src, links) can auth
-    document.cookie = `admin_secret=${encodeURIComponent(value)}; path=/; SameSite=Strict`;
-    setSecret(value);
+  function handleAuth(sessionToken: string) {
+    sessionStorage.setItem("adminToken", sessionToken);
+    document.cookie = `admin_token=${encodeURIComponent(sessionToken)}; path=/; SameSite=Strict`;
+    setToken(sessionToken);
+    setSetupComplete(true);
   }
 
-  if (!checked) {
+  if (!checked || setupComplete === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
@@ -130,25 +284,29 @@ export default function AdminLayout({
     );
   }
 
-  if (!secret) {
-    return <LoginForm onLogin={handleLogin} />;
+  if (!setupComplete) {
+    return <SetupForm onSetup={handleAuth} />;
   }
 
-  return <AuthenticatedLayout secret={secret}>{children}</AuthenticatedLayout>;
+  if (!token) {
+    return <LoginForm onLogin={handleAuth} />;
+  }
+
+  return <AuthenticatedLayout token={token}>{children}</AuthenticatedLayout>;
 }
 
 function AuthenticatedLayout({
-  secret,
+  token,
   children,
 }: {
-  secret: string;
+  token: string;
   children: React.ReactNode;
 }) {
-  const auth = useAdminAuth(secret);
+  const auth = useAdminAuth(token);
 
   function handleLogout() {
-    sessionStorage.removeItem("adminSecret");
-    document.cookie = "admin_secret=; path=/; max-age=0";
+    sessionStorage.removeItem("adminToken");
+    document.cookie = "admin_token=; path=/; max-age=0";
     window.location.href = "/admin";
   }
 
@@ -163,7 +321,7 @@ function AuthenticatedLayout({
                   href="/admin"
                   className="text-white font-bold text-lg mr-6"
                 >
-                  I-9 Admin
+                  Open I-9
                 </Link>
                 <nav className="flex items-center gap-1">
                   <AdminNavLink href="/admin" label="Submissions" />

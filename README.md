@@ -127,7 +127,6 @@ The system fills in the official USCIS Form I-9 PDF directly:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DATABASE_URL` | Yes | PostgreSQL connection string (or `file:./dev.db` for SQLite) |
-| `ADMIN_SECRET` | Yes | Password for admin dashboard |
 | `DATA_ENCRYPTION_KEY` | Yes | 64-char hex string for AES-256 PII encryption |
 | `NEXT_PUBLIC_APP_URL` | Yes | Public URL (e.g., `https://i9.yourcompany.com`) |
 | `RESEND_API_KEY` | No | Resend API key for email |
@@ -158,7 +157,7 @@ All sensitive data is encrypted at the application layer before database storage
 ### Access Control
 
 - Employee form: Single-use invite tokens with configurable expiration
-- Admin dashboard: `ADMIN_SECRET` via bearer token + session cookie for browser requests
+- Admin dashboard: Email/password login with bcrypt-hashed credentials stored in the database. Session tokens via bearer header + cookie.
 - Invite creation: Blocked until E-Verify and employer info are configured
 - All API inputs validated with zod
 

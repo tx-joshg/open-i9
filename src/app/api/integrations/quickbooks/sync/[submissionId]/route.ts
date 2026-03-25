@@ -2,17 +2,13 @@ import { NextResponse } from "next/server";
 import { syncSubmission } from "@/lib/integrations/quickbooks";
 import { prisma } from "@/lib/db";
 import type { RecordType } from "@/lib/integrations/types";
-
-function isAuthorized(request: Request): boolean {
-  const auth = request.headers.get("authorization");
-  return auth === `Bearer ${process.env.ADMIN_SECRET}`;
-}
+import { isAuthorized } from "@/lib/auth";
 
 export async function POST(
   request: Request,
   { params }: { params: { submissionId: string } }
 ) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

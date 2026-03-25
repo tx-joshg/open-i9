@@ -3,21 +3,14 @@ import { prisma } from "@/lib/db";
 import { decryptSubmissionPii } from "@/lib/pii";
 import { getPortalConfig } from "@/lib/config";
 import { generateI9Pdf, buildI9PdfData } from "@/lib/i9pdf";
-
-function isAuthorized(request: Request): boolean {
-  const auth = request.headers.get("authorization");
-  if (auth === `Bearer ${process.env.ADMIN_SECRET}`) return true;
-  const cookie = request.headers.get("cookie") ?? "";
-  const match = cookie.match(/admin_secret=([^;]+)/);
-  return match?.[1] === process.env.ADMIN_SECRET;
-}
+import { isAuthorized } from "@/lib/auth";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

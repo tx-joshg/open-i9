@@ -4,11 +4,7 @@ import { prisma } from "@/lib/db";
 import { getPortalConfig } from "@/lib/config";
 import { sendSubmissionEmail, sendEmployeeConfirmationEmail } from "@/lib/email";
 import { encryptPii, encryptPiiOrNull } from "@/lib/pii";
-
-function isAuthorized(request: Request): boolean {
-  const auth = request.headers.get("authorization");
-  return auth === `Bearer ${process.env.ADMIN_SECRET}`;
-}
+import { isAuthorized } from "@/lib/auth";
 
 const citizenshipStatusSchema = z.enum(["usCitizen", "usnational", "lpr", "authorized"]);
 const docChoiceSchema = z.enum(["listA", "listBC"]);
@@ -250,7 +246,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

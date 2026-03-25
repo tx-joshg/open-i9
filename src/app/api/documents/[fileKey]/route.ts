@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { getFileBuffer } from "@/lib/storage";
-
-function isAuthorized(request: Request): boolean {
-  const auth = request.headers.get("authorization");
-  return auth === `Bearer ${process.env.ADMIN_SECRET}`;
-}
+import { isAuthorized } from "@/lib/auth";
 
 const MIME_TYPES: Record<string, string> = {
   jpg: "image/jpeg",
@@ -19,7 +15,7 @@ interface RouteContext {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

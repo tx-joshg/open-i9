@@ -3,11 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { saveCredentials } from "@/lib/integrations/credentials";
 import type { IntegrationPlatform } from "@/lib/integrations/types";
-
-function isAuthorized(request: Request): boolean {
-  const auth = request.headers.get("authorization");
-  return auth === `Bearer ${process.env.ADMIN_SECRET}`;
-}
+import { isAuthorized } from "@/lib/auth";
 
 const VALID_PLATFORMS: IntegrationPlatform[] = [
   "quickbooks",
@@ -17,7 +13,7 @@ const VALID_PLATFORMS: IntegrationPlatform[] = [
 ];
 
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -62,7 +58,7 @@ const credentialsSchema = z.object({
  * POST: Save OAuth credentials for a platform
  */
 export async function POST(request: Request) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

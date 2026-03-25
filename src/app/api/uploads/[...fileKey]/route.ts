@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getFileBuffer } from "@/lib/storage";
+import { isAuthorized } from "@/lib/auth";
 
 const MIME_TYPES: Record<string, string> = {
   jpg: "image/jpeg",
@@ -11,15 +12,6 @@ const MIME_TYPES: Record<string, string> = {
 
 interface RouteContext {
   params: Promise<{ fileKey: string[] }>;
-}
-
-function isAdmin(request: Request): boolean {
-  const auth = request.headers.get("authorization");
-  if (auth === `Bearer ${process.env.ADMIN_SECRET}`) return true;
-  // Also check cookie for browser-initiated requests (img src, anchor href)
-  const cookie = request.headers.get("cookie") ?? "";
-  const match = cookie.match(/admin_secret=([^;]+)/);
-  return match?.[1] === process.env.ADMIN_SECRET;
 }
 
 /**
@@ -52,7 +44,7 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   // Non-image files (PDFs) require admin auth
-  if (!contentType.startsWith("image/") && !isAdmin(request)) {
+  if (!contentType.startsWith("image/") && !(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

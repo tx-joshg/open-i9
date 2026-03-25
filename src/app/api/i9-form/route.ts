@@ -6,11 +6,7 @@ import { prisma } from "@/lib/db";
 import { getFileBuffer } from "@/lib/storage";
 import { invalidateConfigCache } from "@/lib/config";
 import { DEFAULT_FIELD_MAPPING } from "@/lib/i9-field-mapping";
-
-function isAuthorized(request: Request): boolean {
-  const auth = request.headers.get("authorization");
-  return auth === `Bearer ${process.env.ADMIN_SECRET}`;
-}
+import { isAuthorized } from "@/lib/auth";
 
 interface PdfFieldInfo {
   name: string;
@@ -31,7 +27,7 @@ async function loadPdfBytes(fileKey: string | null): Promise<Buffer> {
  * GET: Returns current I-9 form info — PDF field names, current mapping, and form status.
  */
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -94,7 +90,7 @@ export async function GET(request: Request) {
  * Body: { fileKey?: string, mapping?: Record<string, string> }
  */
 export async function PUT(request: Request) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
