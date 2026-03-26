@@ -75,6 +75,18 @@ function HomePageInner() {
     resetForm,
   } = useI9Form({ useEVerify: config.useEVerify });
 
+  // Redirect to admin setup if no admin account exists yet
+  useEffect(() => {
+    fetch("/api/auth")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.setupComplete) {
+          router.replace("/admin");
+        }
+      })
+      .catch(() => {});
+  }, [router]);
+
   // Load portal config
   useEffect(() => {
     async function loadConfig() {
