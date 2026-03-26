@@ -194,3 +194,15 @@ model Submission {
   @@index([employeeId])
   @@index([nextRenewalDate])
 }
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String   // invite.created, invite.used, submission.received, submission.approved, etc.
+  detail    String?  // human-readable detail
+  meta      String?  // JSON: additional structured data
+  actor     String?  // "admin", "system", or employee name
+  createdAt DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+}

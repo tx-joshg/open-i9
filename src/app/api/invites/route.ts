@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getPortalConfig } from "@/lib/config";
 import { isAuthorized } from "@/lib/auth";
+import { log } from "@/lib/audit";
 
 const createInviteSchema = z.object({
   emailHint: z.string().optional(),
@@ -118,6 +119,13 @@ export async function POST(request: Request) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const inviteUrl = `${appUrl}/?token=${invite.token}`;
+
+    log({
+      action: "invite.created",
+      detail: `Invite created for ${data.emailHint || "anonymous"}`,
+      meta: { inviteId: invite.id, emailHint: data.emailHint, workerType: data.workerType },
+      actor: "admin",
+    });
 
     return NextResponse.json(
       {

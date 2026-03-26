@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getPortalConfig, invalidateConfigCache } from "@/lib/config";
 import { isAuthorized } from "@/lib/auth";
+import { log } from "@/lib/audit";
 
 const notificationEmailSchema = z.object({
   email: z.string().email(),
@@ -87,6 +88,9 @@ export async function PUT(request: Request) {
     invalidateConfigCache();
 
     const updated = await getPortalConfig();
+
+    log({ action: "config.updated", detail: "Portal configuration updated", actor: "admin" });
+
     return NextResponse.json(updated);
   } catch (err) {
     console.error("Config update error:", err);

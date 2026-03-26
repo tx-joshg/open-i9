@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { isAuthorized } from "@/lib/auth";
+import { log } from "@/lib/audit";
 
 export async function DELETE(
   request: Request,
@@ -27,6 +28,8 @@ export async function DELETE(
     }
 
     await prisma.invite.delete({ where: { id } });
+
+    log({ action: "invite.revoked", detail: "Invite revoked", meta: { inviteId: id }, actor: "admin" });
 
     return NextResponse.json({ success: true });
   } catch (err) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isSetupComplete, createAdminUser, login, changePassword, isAuthorized } from "@/lib/auth";
+import { log } from "@/lib/audit";
 
 const setupSchema = z.object({
   action: z.literal("setup"),
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
       }
 
       const sessionToken = await createAdminUser(data.email, data.password);
+      log({ action: "admin.setup", detail: "Admin account created", meta: { email: data.email }, actor: "admin" });
       return NextResponse.json({ sessionToken });
     }
 
@@ -72,6 +74,7 @@ export async function POST(request: Request) {
           { status: 401 }
         );
       }
+      log({ action: "admin.login", detail: "Admin logged in", meta: { email: data.email }, actor: "admin" });
       return NextResponse.json({ sessionToken });
     }
 
