@@ -22,7 +22,9 @@ export default function FileUpload({
 }: FileUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const [preview, setPreview] = useState<{ url: string; type: string } | null>(null);
+  const [previewType, setPreviewType] = useState<"image" | "pdf" | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function handleFile(file: File) {
@@ -38,12 +40,16 @@ export default function FileUpload({
     setUploadError("");
     setUploading(true);
 
-    // Generate local preview
+    // Generate local preview from file blob (safe — not from DOM text)
     if (file.type.startsWith("image/")) {
-      const url = URL.createObjectURL(file);
-      setPreview({ url, type: "image" });
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      const blobUrl = URL.createObjectURL(file);
+      previewUrlRef.current = blobUrl;
+      setPreviewUrl(blobUrl);
+      setPreviewType("image");
     } else {
-      setPreview({ url: "", type: "pdf" });
+      setPreviewType("pdf");
+      setPreviewUrl(null);
     }
 
     try {
@@ -64,7 +70,8 @@ export default function FileUpload({
       onChange(data.fileKey);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed");
-      setPreview(null);
+      setPreviewType(null);
+      setPreviewUrl(null);
     } finally {
       setUploading(false);
     }
@@ -72,7 +79,9 @@ export default function FileUpload({
 
   function handleRemove() {
     onChange("");
-    setPreview(null);
+    setPreviewType(null);
+    setPreviewUrl(null);
+    if (previewUrlRef.current) { URL.revokeObjectURL(previewUrlRef.current); previewUrlRef.current = null; }
     setUploadError("");
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -135,8 +144,9 @@ export default function FileUpload({
       {/* Preview */}
       {fileKey && !uploading && (
         <div className="relative flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
-          {preview?.type === "image" && preview.url.startsWith("blob:") ? (
-            <img src={preview.url} alt="Document preview" className="w-16 h-16 object-cover rounded" />
+          {previewType === "image" && previewUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={previewUrl} alt="Document preview" className="w-16 h-16 object-cover rounded" />
           ) : (
             <div className="w-16 h-16 flex items-center justify-center rounded bg-red-100">
               <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
