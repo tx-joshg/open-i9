@@ -24,6 +24,14 @@ fi
 
 echo "Node.js $(node -v) detected."
 
+# Check for Docker (needed for PostgreSQL)
+if ! command -v docker &> /dev/null; then
+  echo ""
+  echo "Warning: Docker not found. You'll need PostgreSQL running somewhere."
+  echo "  Install Docker: https://docs.docker.com/get-docker/"
+  echo "  Or set DATABASE_URL in .env to an existing PostgreSQL instance."
+fi
+
 # Install dependencies
 if [ ! -d "node_modules" ]; then
   echo ""
@@ -47,10 +55,26 @@ if [ ! -f ".env" ]; then
     sed -i "s/^DATA_ENCRYPTION_KEY=\"\"/DATA_ENCRYPTION_KEY=\"$ENCRYPTION_KEY\"/" .env
   fi
 
-  echo "Environment configured with SQLite (local dev database)."
   echo "Encryption key generated automatically."
 else
   echo ".env already exists — skipping."
+fi
+
+# Start PostgreSQL via Docker if not already running
+if command -v docker &> /dev/null; then
+  if ! docker ps --format '{{.Names}}' | grep -q '^i9-postgres$'; then
+    echo ""
+    echo "Starting PostgreSQL via Docker..."
+    docker run -d \
+      --name i9-postgres \
+      -e POSTGRES_PASSWORD=password \
+      -e POSTGRES_DB=i9portal \
+      -p 5432:5432 \
+      postgres:16-alpine 2>/dev/null || echo "Port 5432 may be in use — using existing PostgreSQL."
+    sleep 3
+  else
+    echo "PostgreSQL container already running."
+  fi
 fi
 
 # Run database migrations
@@ -66,7 +90,7 @@ echo "========================================="
 echo ""
 echo "  Start the app:    npm run dev"
 echo ""
-echo "  Then open http://localhost:3000/admin"
+echo "  Then open http://localhost:3000"
 echo "  to create your admin account and"
 echo "  configure your portal."
 echo ""
