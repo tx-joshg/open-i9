@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { decryptSubmissionPii } from "@/lib/pii";
 import { deleteFile } from "@/lib/storage";
 import { isAuthorized } from "@/lib/auth";
+import { log } from "@/lib/audit";
 
 const submissionPatchSchema = z.object({
   status: z.enum(["pending_review", "approved", "rejected"]).optional(),
@@ -90,6 +91,22 @@ export async function PATCH(request: Request, context: RouteContext) {
       where: { id },
       data: updatePayload,
     });
+
+    if (data.status === "approved") {
+      log({
+        action: "submission.approved",
+        detail: `Submission approved for ${existing.firstName} ${existing.lastName}`,
+        meta: { submissionId: id },
+        actor: "admin",
+      });
+    } else if (data.status === "rejected") {
+      log({
+        action: "submission.rejected",
+        detail: `Submission rejected for ${existing.firstName} ${existing.lastName}`,
+        meta: { submissionId: id },
+        actor: "admin",
+      });
+    }
 
     // Purge documents when approved or rejected
     const shouldPurge = data.purgeDocuments && (data.status === "approved" || data.status === "rejected");

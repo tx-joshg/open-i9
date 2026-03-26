@@ -14,6 +14,7 @@ RUN npm run build
 FROM node:18-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apk add --no-cache openssl
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
@@ -23,14 +24,16 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 # Bundled I-9 form PDF (used as default until admin uploads a custom one)
 COPY --from=builder /app/src/lib/i9-form.pdf ./src/lib/i9-form.pdf
 
-# Ensure uploads directory exists and is writable
-RUN mkdir -p /app/public/uploads && chown nextjs:nodejs /app/public/uploads
+# Ensure uploads directory and prisma dirs are writable by nextjs
+RUN mkdir -p /app/public/uploads && chown -R nextjs:nodejs /app/public/uploads
+RUN chown -R nextjs:nodejs /app/node_modules/.prisma /app/node_modules/@prisma /app/node_modules/prisma /app/prisma
 
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
-CMD ["node", "server.js"]
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]

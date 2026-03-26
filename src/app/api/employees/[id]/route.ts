@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { isAuthorized } from "@/lib/auth";
+import { log } from "@/lib/audit";
 
 const employeePatchSchema = z.object({
   firstName: z.string().min(1).optional(),
@@ -116,6 +117,22 @@ export async function PATCH(request: Request, context: RouteContext) {
       where: { id },
       data: updatePayload,
     });
+
+    if (data.status === "terminated") {
+      log({
+        action: "employee.terminated",
+        detail: `Terminated ${existing.firstName} ${existing.lastName}`,
+        meta: { employeeId: id },
+        actor: "admin",
+      });
+    } else if (data.status === "active" && existing.status === "terminated") {
+      log({
+        action: "employee.reactivated",
+        detail: `Reactivated ${existing.firstName} ${existing.lastName}`,
+        meta: { employeeId: id },
+        actor: "admin",
+      });
+    }
 
     return NextResponse.json(updated);
   } catch (err) {

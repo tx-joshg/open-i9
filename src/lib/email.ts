@@ -4,6 +4,7 @@ import type { Submission } from "@prisma/client";
 import type { PortalConfig } from "@/types/i9";
 import { getFileBuffer, getFileUrl } from "./storage";
 import { decryptSubmissionPii, type DecryptedSubmissionPii } from "./pii";
+import { log } from "@/lib/audit";
 
 interface EmailAttachment {
   filename: string;
@@ -136,9 +137,29 @@ export async function sendSubmissionEmail(
   const attachments = await resolveAttachments(submission);
 
   if (process.env.RESEND_API_KEY) {
-    await sendViaResend(recipients, subject, html, attachments);
+    try {
+      await sendViaResend(recipients, subject, html, attachments);
+      for (const recipient of recipients) {
+        log({ action: "email.sent", detail: `Notification sent to ${recipient}`, actor: "system" });
+      }
+    } catch (error) {
+      for (const recipient of recipients) {
+        log({ action: "email.failed", detail: `Failed to send to ${recipient}: ${error}`, actor: "system" });
+      }
+      throw error;
+    }
   } else if (process.env.SMTP_HOST) {
-    await sendViaSMTP(recipients, subject, html, attachments);
+    try {
+      await sendViaSMTP(recipients, subject, html, attachments);
+      for (const recipient of recipients) {
+        log({ action: "email.sent", detail: `Notification sent to ${recipient}`, actor: "system" });
+      }
+    } catch (error) {
+      for (const recipient of recipients) {
+        log({ action: "email.failed", detail: `Failed to send to ${recipient}: ${error}`, actor: "system" });
+      }
+      throw error;
+    }
   } else {
     console.warn("No email provider configured (RESEND_API_KEY or SMTP_HOST). Email not sent.");
   }
@@ -163,8 +184,20 @@ export async function sendEmployeeConfirmationEmail(
 
   const to = [pii.email];
   if (process.env.RESEND_API_KEY) {
-    await sendViaResend(to, subject, html, []);
+    try {
+      await sendViaResend(to, subject, html, []);
+      log({ action: "email.sent", detail: `Notification sent to ${pii.email}`, actor: "system" });
+    } catch (error) {
+      log({ action: "email.failed", detail: `Failed to send to ${pii.email}: ${error}`, actor: "system" });
+      throw error;
+    }
   } else if (process.env.SMTP_HOST) {
-    await sendViaSMTP(to, subject, html, []);
+    try {
+      await sendViaSMTP(to, subject, html, []);
+      log({ action: "email.sent", detail: `Notification sent to ${pii.email}`, actor: "system" });
+    } catch (error) {
+      log({ action: "email.failed", detail: `Failed to send to ${pii.email}: ${error}`, actor: "system" });
+      throw error;
+    }
   }
 }

@@ -337,6 +337,7 @@ function AuthenticatedLayout({
                     href="/admin/i9-form"
                     label="I-9 Form"
                   />
+                  <AdminNavLink href="/admin/logs" label="Activity Log" />
                 </nav>
               </div>
               <button

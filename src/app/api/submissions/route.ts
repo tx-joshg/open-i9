@@ -5,6 +5,7 @@ import { getPortalConfig } from "@/lib/config";
 import { sendSubmissionEmail, sendEmployeeConfirmationEmail } from "@/lib/email";
 import { encryptPii, encryptPiiOrNull } from "@/lib/pii";
 import { isAuthorized } from "@/lib/auth";
+import { log } from "@/lib/audit";
 
 const citizenshipStatusSchema = z.enum(["usCitizen", "usnational", "lpr", "authorized"]);
 const docChoiceSchema = z.enum(["listA", "listBC"]);
@@ -234,6 +235,13 @@ export async function POST(request: Request) {
     sendEmployeeConfirmationEmail(submission, config).catch((err) =>
       console.error("Failed to send employee confirmation email:", err)
     );
+
+    log({
+      action: "submission.received",
+      detail: `Submission from ${data.firstName} ${data.lastName}`,
+      meta: { submissionId: submission.id, isRenewal },
+      actor: `${data.firstName} ${data.lastName}`,
+    });
 
     return NextResponse.json({ id: submission.id, success: true }, { status: 201 });
   } catch (err) {
