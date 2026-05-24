@@ -5,16 +5,40 @@ const ALLOWED_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/heic", // iPhone default photo format
+  "image/heif",
   "application/pdf",
 ];
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+
+// Duck-typed FormData file. We don't `instanceof File` because the
+// `File` global isn't reliably present in all Node runtimes (Node 18
+// lacks it entirely; Node 20 only exposes it via `node:buffer`). The
+// Web File interface always exposes `name`, `type`, `size`, and
+// `arrayBuffer()` — that's all the upload route actually needs.
+type UploadedFile = {
+  name: string;
+  type: string;
+  size: number;
+  arrayBuffer(): Promise<ArrayBuffer>;
+};
+
+function isUploadedFile(x: unknown): x is UploadedFile {
+  return (
+    !!x &&
+    typeof x === "object" &&
+    typeof (x as { arrayBuffer?: unknown }).arrayBuffer === "function" &&
+    typeof (x as { size?: unknown }).size === "number" &&
+    typeof (x as { type?: unknown }).type === "string"
+  );
+}
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get("file");
 
-    if (!file || !(file instanceof File)) {
+    if (!isUploadedFile(file)) {
       return NextResponse.json(
         { error: "No file provided" },
         { status: 400 }
