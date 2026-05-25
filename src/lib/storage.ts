@@ -4,7 +4,15 @@ import { v4 as uuidv4 } from "uuid";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 const STORAGE_PROVIDER = process.env.STORAGE_PROVIDER || "local";
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
+
+// For local storage, files live at `${STORAGE_ROOT}/uploads/<uuid>.<ext>`.
+// In dev, defaults to `./public/uploads` (served statically by Next).
+// In Railway, set STORAGE_ROOT=/data so uploads land on a mounted volume
+// instead of the ephemeral container filesystem; files are then served via
+// the `/api/uploads/[...fileKey]` route (which goes through getFileBuffer).
+const STORAGE_ROOT =
+  process.env.STORAGE_ROOT || path.join(process.cwd(), "public");
+const UPLOAD_DIR = path.join(STORAGE_ROOT, "uploads");
 
 const ALLOWED_TYPES = [
   "image/jpeg",
@@ -70,10 +78,10 @@ export async function uploadFile(
 
   // Local storage
   await mkdir(UPLOAD_DIR, { recursive: true });
-  const filePath = path.join(process.cwd(), "public", fileKey);
+  const filePath = path.join(STORAGE_ROOT, fileKey);
   await writeFile(filePath, buffer);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  return { fileKey, url: `${appUrl}/${fileKey}` };
+  return { fileKey, url: `${appUrl}/api/uploads/${fileKey}` };
 }
 
 export async function getFileBuffer(fileKey: string): Promise<Buffer> {
@@ -95,7 +103,7 @@ export async function getFileBuffer(fileKey: string): Promise<Buffer> {
     return Buffer.concat(chunks);
   }
 
-  const filePath = path.join(process.cwd(), "public", fileKey);
+  const filePath = path.join(STORAGE_ROOT, fileKey);
   return readFile(filePath);
 }
 
@@ -111,7 +119,7 @@ export async function deleteFile(fileKey: string): Promise<void> {
     return;
   }
 
-  const filePath = path.join(process.cwd(), "public", fileKey);
+  const filePath = path.join(STORAGE_ROOT, fileKey);
   await unlink(filePath);
 }
 
@@ -120,5 +128,5 @@ export function getFileUrl(fileKey: string): string {
     return `${process.env.S3_PUBLIC_URL}/${fileKey}`;
   }
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  return `${appUrl}/${fileKey}`;
+  return `${appUrl}/api/uploads/${fileKey}`;
 }
