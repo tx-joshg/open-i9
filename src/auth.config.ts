@@ -6,6 +6,9 @@ import type { NextAuthConfig } from "next-auth";
  * which runs on the Edge runtime where Prisma isn't available.
  */
 export const authConfig: NextAuthConfig = {
+  // Railway terminates TLS at the edge and forwards via x-forwarded-host;
+  // without trustHost, Auth.js refuses the request as UntrustedHost.
+  trustHost: true,
   pages: {
     signIn: "/admin/login",
     error: "/admin/login",
