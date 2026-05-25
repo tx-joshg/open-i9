@@ -8,13 +8,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Email allowlist for admin access. Authentication itself happens via OAuth
+// (Google / Microsoft Entra) — only emails listed here are allowed to sign in.
+// When the table is empty, the first OAuth signer becomes the bootstrap admin
+// (used for first-time setup). After that, existing admins manage the list.
 model AdminUser {
-  id             String   @id @default(cuid())
-  email          String   @unique
-  hashedPassword String
-  sessionToken   String?  @unique
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model PortalConfig {

@@ -1,6 +1,6 @@
 FROM node:18-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 COPY prisma ./prisma/
 RUN npm ci
 RUN npx prisma generate
@@ -14,7 +14,9 @@ RUN npm run build
 FROM node:18-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apk add --no-cache openssl
+# `su-exec` lets the entrypoint drop privileges from root to nextjs after
+# fixing volume-mount ownership at runtime.
+RUN apk add --no-cache openssl su-exec
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
@@ -29,11 +31,13 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 # Bundled I-9 form PDF (used as default until admin uploads a custom one)
 COPY --from=builder /app/src/lib/i9-form.pdf ./src/lib/i9-form.pdf
 
-# Ensure uploads directory and prisma dirs are writable by nextjs
-RUN mkdir -p /app/public/uploads && chown -R nextjs:nodejs /app/public/uploads
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 RUN chown -R nextjs:nodejs /app/node_modules/.prisma /app/node_modules/@prisma /app/node_modules/prisma /app/prisma
 
-USER nextjs
+# Entrypoint runs as root to chown the (possibly mounted) STORAGE_ROOT,
+# then drops to the nextjs user via su-exec before starting the server.
 EXPOSE 3000
 ENV PORT=3000
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
