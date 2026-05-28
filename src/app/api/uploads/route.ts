@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import heicConvert from "heic-convert";
 import { uploadFile } from "@/lib/storage";
 
 const ALLOWED_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
-  "image/heic", // iPhone default photo format
+  "image/heic", // iPhone default photo format — converted to JPEG before storage
   "image/heif",
   "application/pdf",
 ];
@@ -60,9 +61,23 @@ export async function POST(request: Request) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    let buffer = Buffer.from(arrayBuffer);
+    let mimeType = file.type;
 
-    const result = await uploadFile(buffer, file.type);
+    // Convert HEIC/HEIF → JPEG so browsers (esp Chrome) can render previews
+    // in the admin console. Storage layer also rejects HEIC, so this has to
+    // happen before uploadFile().
+    if (mimeType === "image/heic" || mimeType === "image/heif") {
+      const jpegArrayBuffer = await heicConvert({
+        buffer: arrayBuffer,
+        format: "JPEG",
+        quality: 0.92,
+      });
+      buffer = Buffer.from(jpegArrayBuffer);
+      mimeType = "image/jpeg";
+    }
+
+    const result = await uploadFile(buffer, mimeType);
 
     return NextResponse.json({ fileKey: result.fileKey, url: result.url });
   } catch (err) {

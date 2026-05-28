@@ -145,6 +145,84 @@ function MaskedSSNField({ value }: { value: string | undefined | null }) {
   );
 }
 
+interface ConfirmDialogProps {
+  open: boolean;
+  title: string;
+  message: React.ReactNode;
+  confirmLabel: string;
+  confirmTone: "indigo" | "red";
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel,
+  confirmTone,
+  onConfirm,
+  onCancel,
+}: ConfirmDialogProps) {
+  // Close on Escape so keyboard users aren't trapped.
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onCancel]);
+
+  if (!open) return null;
+
+  const confirmClasses =
+    confirmTone === "red"
+      ? "bg-red-600 hover:bg-red-700 focus:ring-red-500"
+      : "bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-dialog-title"
+    >
+      <div
+        className="absolute inset-0 bg-gray-900/50"
+        onClick={onCancel}
+        aria-hidden="true"
+      />
+      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6 z-10">
+        <h3
+          id="confirm-dialog-title"
+          className="text-lg font-semibold text-gray-900 mb-2"
+        >
+          {title}
+        </h3>
+        <div className="text-sm text-gray-600 space-y-2 mb-6">{message}</div>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            autoFocus
+            className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${confirmClasses}`}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FieldRow({ label, value }: { label: string; value: string | undefined | null }) {
   return (
     <div className="py-3 sm:grid sm:grid-cols-3 sm:gap-4">
@@ -170,7 +248,14 @@ export default function SubmissionDetailPage() {
   const [savingNotes, setSavingNotes] = useState(false);
   const [resending, setResending] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"info" | "error">("info");
   const [hireDate, setHireDate] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  function showMessage(text: string, tone: "info" | "error" = "info") {
+    setMessage(text);
+    setMessageTone(tone);
+  }
 
   const loadSubmission = useCallback(async () => {
     setLoading(true);
@@ -195,33 +280,28 @@ export default function SubmissionDetailPage() {
     loadSubmission();
   }, [loadSubmission]);
 
-  async function handleStatusSave() {
+  function handleStatusSave() {
     const willPurge = status === "approved" || status === "rejected";
 
-    if (status === "approved") {
-      if (!hireDate) {
-        setMessage("Please enter a hire/engagement date before approving.");
-        return;
-      }
-      const confirmed = window.confirm(
-        "Approving this submission will permanently delete all uploaded documents. " +
-        "This cannot be undone.\n\n" +
-        "You are confirming that you have reviewed the employee's identity and " +
-        "employment authorization documents.\n\n" +
-        "Continue with approval?"
-      );
-      if (!confirmed) return;
+    if (status === "approved" && !hireDate) {
+      showMessage("Please enter a hire/engagement date before approving.", "error");
+      return;
     }
 
-    if (status === "rejected") {
-      const confirmed = window.confirm(
-        "Rejecting this submission will permanently delete all uploaded documents. " +
-        "This cannot be undone.\n\n" +
-        "Continue with rejection?"
-      );
-      if (!confirmed) return;
+    // Destructive transitions (approve/reject) gate on a styled confirm
+    // modal — the old window.confirm() was jarring + skipped on some
+    // mobile WebViews. Non-destructive status changes go straight through.
+    if (willPurge) {
+      setConfirmOpen(true);
+      return;
     }
 
+    void performStatusSave();
+  }
+
+  async function performStatusSave() {
+    const willPurge = status === "approved" || status === "rejected";
+    setConfirmOpen(false);
     setSaving(true);
     setMessage("");
     try {
@@ -231,10 +311,11 @@ export default function SubmissionDetailPage() {
         body: JSON.stringify({ status, purgeDocuments: willPurge, hireDate }),
       });
       if (res.ok) {
-        setMessage(
+        showMessage(
           willPurge
             ? `Submission ${status}. Documents have been purged.`
-            : "Status updated."
+            : "Status updated.",
+          "info",
         );
         if (willPurge) {
           loadSubmission();
@@ -242,10 +323,20 @@ export default function SubmissionDetailPage() {
           setSubmission((prev) => (prev ? { ...prev, status } : prev));
         }
       } else {
-        setMessage("Failed to update status.");
+        // Try to surface server error message; fall back to status text.
+        let detail = res.statusText || `HTTP ${res.status}`;
+        try {
+          const body = await res.json();
+          if (body?.error) detail = String(body.error);
+        } catch { /* response wasn't JSON */ }
+        showMessage(`Failed to update status: ${detail}`, "error");
       }
-    } catch {
-      setMessage("Failed to update status.");
+    } catch (err) {
+      // Network failure or fetchWithAuth-triggered redirect — surface it
+      // instead of silently swallowing (the old code's bare catch made
+      // approve clicks look like nothing happened).
+      const detail = err instanceof Error ? err.message : "network error";
+      showMessage(`Failed to update status: ${detail}`, "error");
     } finally {
       setSaving(false);
     }
@@ -261,13 +352,13 @@ export default function SubmissionDetailPage() {
         body: JSON.stringify({ adminNotes }),
       });
       if (res.ok) {
-        setMessage("Notes saved.");
+        showMessage("Notes saved.", "info");
         setSubmission((prev) => (prev ? { ...prev, adminNotes } : prev));
       } else {
-        setMessage("Failed to save notes.");
+        showMessage("Failed to save notes.", "error");
       }
     } catch {
-      setMessage("Failed to save notes.");
+      showMessage("Failed to save notes.", "error");
     } finally {
       setSavingNotes(false);
     }
@@ -281,12 +372,12 @@ export default function SubmissionDetailPage() {
         method: "POST",
       });
       if (res.ok) {
-        setMessage("Notification email resent.");
+        showMessage("Notification email resent.", "info");
       } else {
-        setMessage("Failed to resend email.");
+        showMessage("Failed to resend email.", "error");
       }
     } catch {
-      setMessage("Failed to resend email.");
+      showMessage("Failed to resend email.", "error");
     } finally {
       setResending(false);
     }
@@ -342,7 +433,7 @@ export default function SubmissionDetailPage() {
                 a.click();
                 URL.revokeObjectURL(url);
               } catch {
-                setMessage("Failed to download PDF.");
+                showMessage("Failed to download PDF.", "error");
               }
             }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-600 border border-indigo-300 rounded-md hover:bg-indigo-50 transition-colors"
@@ -356,7 +447,13 @@ export default function SubmissionDetailPage() {
       </div>
 
       {message && (
-        <div className="mb-4 px-4 py-2 bg-blue-50 text-blue-800 rounded-md text-sm">
+        <div
+          className={`mb-4 px-4 py-2 rounded-md text-sm ${
+            messageTone === "error"
+              ? "bg-red-50 text-red-800 border border-red-200"
+              : "bg-blue-50 text-blue-800"
+          }`}
+        >
           {message}
         </div>
       )}
@@ -623,6 +720,36 @@ export default function SubmissionDetailPage() {
             )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={status === "approved" ? "Approve submission?" : "Reject submission?"}
+        message={
+          status === "approved" ? (
+            <>
+              <p>
+                Approving this submission will{" "}
+                <strong>permanently delete all uploaded documents</strong>. This
+                cannot be undone.
+              </p>
+              <p>
+                You are confirming that you have reviewed the employee&apos;s
+                identity and employment authorization documents.
+              </p>
+            </>
+          ) : (
+            <p>
+              Rejecting this submission will{" "}
+              <strong>permanently delete all uploaded documents</strong>. This
+              cannot be undone.
+            </p>
+          )
+        }
+        confirmLabel={status === "approved" ? "Approve" : "Reject"}
+        confirmTone={status === "approved" ? "indigo" : "red"}
+        onConfirm={() => void performStatusSave()}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

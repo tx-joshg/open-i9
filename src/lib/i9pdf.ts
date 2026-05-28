@@ -128,11 +128,53 @@ export async function generateI9Pdf(data: I9PdfData): Promise<Uint8Array> {
   const doc = await PDFDocument.load(formBytes, { ignoreEncryption: true });
   const form = doc.getForm();
 
+  // Build a normalized lookup so admin-uploaded PDFs with minor naming
+  // drift (e.g. older USCIS edition where SSN is "SSN" instead of
+  // "US Social Security Number", or extra whitespace / punctuation) still
+  // resolve. Normalization: lowercase, collapse whitespace, drop punctuation.
+  const normalize = (s: string): string =>
+    s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+  const fieldsByNormalized = new Map<string, string>();
+  for (const f of form.getFields()) {
+    fieldsByNormalized.set(normalize(f.getName()), f.getName());
+  }
+
+  // Known aliases for fields that have shifted naming between USCIS editions
+  // (e.g. 08/01/23 → 01/20/25). When the mapped name isn't present in the
+  // loaded PDF, we try these in order.
+  const FIELD_ALIASES: Record<string, string[]> = {
+    "US Social Security Number": [
+      "SSN",
+      "Social Security Number",
+      "U.S. Social Security Number",
+      "USSocialSecurityNumber",
+    ],
+  };
+
+  function resolveFieldName(fieldName: string): string | null {
+    // Exact match first
+    if (fieldsByNormalized.has(normalize(fieldName))) {
+      return fieldsByNormalized.get(normalize(fieldName))!;
+    }
+    // Try registered aliases
+    const aliases = FIELD_ALIASES[fieldName] ?? [];
+    for (const alias of aliases) {
+      const resolved = fieldsByNormalized.get(normalize(alias));
+      if (resolved) return resolved;
+    }
+    return null;
+  }
+
   function setText(fieldName: string, value: string | null | undefined) {
     if (!value || !fieldName) return;
+    const resolved = resolveFieldName(fieldName);
+    if (!resolved) {
+      console.warn(`I-9 PDF field not found: ${fieldName}`);
+      return;
+    }
     try {
-      const field = form.getTextField(fieldName);
-      field.setText(value);
+      form.getTextField(resolved).setText(value);
     } catch {
       console.warn(`I-9 PDF field not found: ${fieldName}`);
     }
@@ -140,9 +182,13 @@ export async function generateI9Pdf(data: I9PdfData): Promise<Uint8Array> {
 
   function setCheck(fieldName: string, checked: boolean) {
     if (!checked || !fieldName) return;
+    const resolved = resolveFieldName(fieldName);
+    if (!resolved) {
+      console.warn(`I-9 PDF checkbox not found: ${fieldName}`);
+      return;
+    }
     try {
-      const field = form.getCheckBox(fieldName);
-      field.check();
+      form.getCheckBox(resolved).check();
     } catch {
       console.warn(`I-9 PDF checkbox not found: ${fieldName}`);
     }
@@ -150,9 +196,13 @@ export async function generateI9Pdf(data: I9PdfData): Promise<Uint8Array> {
 
   function setDropdown(fieldName: string, value: string | null | undefined) {
     if (!value || !fieldName) return;
+    const resolved = resolveFieldName(fieldName);
+    if (!resolved) {
+      console.warn(`I-9 PDF dropdown not found: ${fieldName}`);
+      return;
+    }
     try {
-      const field = form.getDropdown(fieldName);
-      field.select(value);
+      form.getDropdown(resolved).select(value);
     } catch {
       console.warn(`I-9 PDF dropdown not found: ${fieldName}`);
     }
