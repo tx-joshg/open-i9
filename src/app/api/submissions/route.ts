@@ -153,8 +153,38 @@ export async function POST(request: Request) {
 
         if (invite.employeeId) {
           employeeId = invite.employeeId;
+        } else if (invite.externalId) {
+          // Partner system gave us a stable identifier. If an Employee
+          // already exists with that externalId (e.g. a renewal — same
+          // person, new invite), reuse it. Otherwise create a new one
+          // and stamp the externalId so future syncs find it
+          // deterministically.
+          const existing = await prisma.employee.findUnique({
+            where: { externalId: invite.externalId },
+          });
+          if (existing) {
+            employeeId = existing.id;
+          } else {
+            const employee = await prisma.employee.create({
+              data: {
+                firstName: data.firstName,
+                lastName: data.lastName,
+                email: data.email,
+                phone: data.phone || null,
+                workerType: invite.workerType ?? "employee",
+                externalId: invite.externalId,
+              },
+            });
+            employeeId = employee.id;
+          }
+          await prisma.invite.update({
+            where: { id: invite.id },
+            data: { employeeId },
+          });
         } else {
-          // Create a new employee from submission data
+          // No externalId on the invite — standalone open-i9 install,
+          // or a partner that hasn't adopted the externalId path yet.
+          // Create a fresh Employee with no cross-system anchor.
           const employee = await prisma.employee.create({
             data: {
               firstName: data.firstName,
@@ -165,8 +195,6 @@ export async function POST(request: Request) {
             },
           });
           employeeId = employee.id;
-
-          // Link invite to new employee
           await prisma.invite.update({
             where: { id: invite.id },
             data: { employeeId: employee.id },
@@ -299,13 +327,24 @@ export async function GET(request: Request) {
           isRenewal: true,
           employeeId: true,
           nextRenewalDate: true,
+          // Partner-system stable ID (e.g. NyTex's "NTX-2053"). Joined
+          // through the linked Employee; null when there's no partner
+          // anchor on this submission.
+          employee: { select: { externalId: true } },
         },
       }),
       prisma.submission.count({ where }),
     ]);
 
+    // Project externalId to the top-level of each row so partner-system
+    // sync callers don't have to dig through .employee.
+    const projected = submissions.map((s) => ({
+      ...s,
+      externalId: s.employee?.externalId ?? null,
+    }));
+
     return NextResponse.json({
-      submissions,
+      submissions: projected,
       pagination: {
         page,
         limit,

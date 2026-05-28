@@ -15,6 +15,9 @@ interface EmployeeRow {
   hireDate: string | null;
   terminatedAt: string | null;
   notes: string | null;
+  // Stable identifier from the partner system (e.g. NyTex staff-portal's
+  // "NTX-2053"). Null for employees not tied to a partner.
+  externalId: string | null;
   createdAt: string;
   submissionCount: number;
   latestSubmissionDate: string | null;
@@ -241,6 +244,9 @@ export default function AdminEmployeesPage() {
     (safeCurrentPage - 1) * PAGE_SIZE,
     safeCurrentPage * PAGE_SIZE
   );
+  // Hide the External ID column entirely on standalone open-i9 installs
+  // where no row carries a partner-system anchor — keeps the table tidy.
+  const hasExternalIds = paged.some((e) => !!e.externalId);
 
   async function handleSendRenewal(employeeId: string) {
     setRenewalLoading(employeeId);
@@ -343,6 +349,14 @@ export default function AdminEmployeesPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Name
                 </th>
+                {/* External ID column shows only when at least one row
+                    on the page has one — keeps the table clean for any
+                    standalone open-i9 install with no partner system. */}
+                {hasExternalIds ? (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    External ID
+                  </th>
+                ) : null}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Email
                 </th>
@@ -366,7 +380,7 @@ export default function AdminEmployeesPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={hasExternalIds ? 8 : 7} className="px-6 py-12 text-center">
                     <div className="flex justify-center">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
                     </div>
@@ -375,7 +389,7 @@ export default function AdminEmployeesPage() {
               ) : paged.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={hasExternalIds ? 8 : 7}
                     className="px-6 py-12 text-center text-sm text-gray-500"
                   >
                     No employees found
@@ -391,6 +405,11 @@ export default function AdminEmployeesPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {emp.firstName} {emp.lastName}
                     </td>
+                    {hasExternalIds ? (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-700">
+                        {emp.externalId ?? "—"}
+                      </td>
+                    ) : null}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {emp.email}
                     </td>

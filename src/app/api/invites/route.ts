@@ -12,6 +12,12 @@ const createInviteSchema = z.object({
   isRenewal: z.boolean().optional(),
   employeeId: z.string().optional(),
   workerType: z.enum(["employee", "contractor"]).optional().default("employee"),
+  // Stable partner-system identifier (e.g. NyTex staff-portal's
+  // staffNumber "NTX-2053"). Propagates to Invite.externalId, then to
+  // Employee.externalId at submission time. Partner sync code matches
+  // on it deterministically instead of falling back to fragile
+  // first+last name lookups.
+  externalId: z.string().optional(),
 });
 
 export async function GET(request: Request) {
@@ -35,6 +41,7 @@ export async function GET(request: Request) {
           token: true,
           emailHint: true,
           nameHint: true,
+          externalId: true,
           expiresAt: true,
           usedAt: true,
           isRenewal: true,
@@ -110,6 +117,7 @@ export async function POST(request: Request) {
       data: {
         emailHint: data.emailHint || null,
         nameHint: data.nameHint || null,
+        externalId: data.externalId || null,
         expiresAt,
         isRenewal: data.isRenewal ?? false,
         employeeId: data.employeeId || null,

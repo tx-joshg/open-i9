@@ -72,6 +72,12 @@ model Invite {
   token        String    @unique @default(cuid())
   emailHint    String?   // optional: who this invite is for (display only)
   nameHint     String?   // optional: employee name hint
+  // Stable identifier from a partner system (e.g. NyTex staff-portal's
+  // staffNumber "NTX-2053"). When set, the submission flow links to the
+  // existing Employee with the same externalId instead of creating a new
+  // one. Non-unique because admins may re-mint a fresh invite after one
+  // expires; both invites point at the same partner-system person.
+  externalId   String?
   expiresAt    DateTime
   usedAt       DateTime?
   employeeId   String?   // linked after submission
@@ -81,6 +87,7 @@ model Invite {
   createdAt    DateTime  @default(now())
 
   @@index([token])
+  @@index([externalId])
 }
 
 model Employee {
@@ -94,6 +101,12 @@ model Employee {
   hireDate     DateTime?    // "Engagement date" for contractors
   terminatedAt DateTime?    // "End of engagement" for contractors
   notes        String?
+  // Stable identifier from a partner system. Populated when an Invite
+  // with externalId is used. Sparse-unique: nulls allowed (open-i9
+  // standalone has no partner system), but once stamped, one Employee
+  // per externalId per install. This is the canonical cross-system
+  // anchor — partner sync code matches on it.
+  externalId   String?      @unique
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
