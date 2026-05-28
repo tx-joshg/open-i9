@@ -133,58 +133,107 @@ export async function POST(request: Request) {
       listCExpDate: data.listCExpDate,
     });
 
-    // Resolve invite token if provided
+    // Resolve invite token if provided.
+    //
+    // Concurrent-claim hazard: a naive read-then-update lets two
+    // simultaneous POSTs (double-click on the submit button, network
+    // retry, browser back+resubmit) both see usedAt=null and both
+    // create a Submission against the same Employee — exactly what
+    // Alexa Roberson hit and surfaced as duplicate rows in the open-i9
+    // admin Submissions table.
+    //
+    // Fix: atomic claim via updateMany with the usedAt:null + not-expired
+    // guard baked into WHERE. Only ONE concurrent caller's UPDATE matches
+    // (Postgres serializes row writes); everyone else gets count=0 and
+    // we short-circuit to "return the existing submission" so the caller's
+    // idempotent retry succeeds quietly instead of creating a dup.
     let employeeId: string | null = null;
     let isRenewal = false;
 
     if (data.inviteToken) {
+      const now = new Date();
+      const claim = await prisma.invite.updateMany({
+        where: {
+          token: data.inviteToken,
+          usedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: { usedAt: now },
+      });
+
+      if (claim.count === 0) {
+        // Either invalid, expired, or — most commonly — already used
+        // by a successful prior submission. Return that prior submission
+        // so the wizard's "we're done" UI flow doesn't get confused
+        // by a 4xx on what the user already finished.
+        const invite = await prisma.invite.findUnique({
+          where: { token: data.inviteToken },
+          select: { id: true, employeeId: true, usedAt: true, expiresAt: true },
+        });
+        if (!invite) {
+          return NextResponse.json(
+            { error: "Invalid invite token" },
+            { status: 400 }
+          );
+        }
+        if (invite.expiresAt <= now) {
+          return NextResponse.json(
+            { error: "Invite has expired" },
+            { status: 410 }
+          );
+        }
+        // Already used — find the original Submission and return its id
+        // with 200 (not 201) so the caller knows this was idempotent.
+        if (invite.employeeId) {
+          const existing = await prisma.submission.findFirst({
+            where: { employeeId: invite.employeeId },
+            orderBy: { createdAt: "desc" },
+            select: { id: true },
+          });
+          if (existing) {
+            return NextResponse.json(
+              { id: existing.id, success: true, idempotent: true },
+              { status: 200 }
+            );
+          }
+        }
+        // Edge case: invite was claimed but no submission landed (claim
+        // happened, then the Submission insert below errored). Treat
+        // as conflict so the caller can investigate.
+        return NextResponse.json(
+          { error: "Invite already used" },
+          { status: 409 }
+        );
+      }
+
+      // Claim succeeded. Re-read the row (updateMany doesn't return it)
+      // and resolve the employee link.
       const invite = await prisma.invite.findUnique({
         where: { token: data.inviteToken },
       });
+      if (!invite) {
+        // Should be impossible — we just updated it — but typecheck.
+        return NextResponse.json(
+          { error: "Invite vanished after claim" },
+          { status: 500 }
+        );
+      }
+      isRenewal = invite.isRenewal;
 
-      if (invite && !invite.usedAt && invite.expiresAt > new Date()) {
-        // Mark invite as used
-        await prisma.invite.update({
-          where: { id: invite.id },
-          data: { usedAt: new Date() },
+      if (invite.employeeId) {
+        employeeId = invite.employeeId;
+      } else if (invite.externalId) {
+        // Partner system gave us a stable identifier. If an Employee
+        // already exists with that externalId (e.g. a renewal — same
+        // person, new invite), reuse it. Otherwise create a new one
+        // and stamp the externalId so future syncs find it
+        // deterministically.
+        const existing = await prisma.employee.findUnique({
+          where: { externalId: invite.externalId },
         });
-
-        isRenewal = invite.isRenewal;
-
-        if (invite.employeeId) {
-          employeeId = invite.employeeId;
-        } else if (invite.externalId) {
-          // Partner system gave us a stable identifier. If an Employee
-          // already exists with that externalId (e.g. a renewal — same
-          // person, new invite), reuse it. Otherwise create a new one
-          // and stamp the externalId so future syncs find it
-          // deterministically.
-          const existing = await prisma.employee.findUnique({
-            where: { externalId: invite.externalId },
-          });
-          if (existing) {
-            employeeId = existing.id;
-          } else {
-            const employee = await prisma.employee.create({
-              data: {
-                firstName: data.firstName,
-                lastName: data.lastName,
-                email: data.email,
-                phone: data.phone || null,
-                workerType: invite.workerType ?? "employee",
-                externalId: invite.externalId,
-              },
-            });
-            employeeId = employee.id;
-          }
-          await prisma.invite.update({
-            where: { id: invite.id },
-            data: { employeeId },
-          });
+        if (existing) {
+          employeeId = existing.id;
         } else {
-          // No externalId on the invite — standalone open-i9 install,
-          // or a partner that hasn't adopted the externalId path yet.
-          // Create a fresh Employee with no cross-system anchor.
           const employee = await prisma.employee.create({
             data: {
               firstName: data.firstName,
@@ -192,14 +241,33 @@ export async function POST(request: Request) {
               email: data.email,
               phone: data.phone || null,
               workerType: invite.workerType ?? "employee",
+              externalId: invite.externalId,
             },
           });
           employeeId = employee.id;
-          await prisma.invite.update({
-            where: { id: invite.id },
-            data: { employeeId: employee.id },
-          });
         }
+        await prisma.invite.update({
+          where: { id: invite.id },
+          data: { employeeId },
+        });
+      } else {
+        // No externalId on the invite — standalone open-i9 install,
+        // or a partner that hasn't adopted the externalId path yet.
+        // Create a fresh Employee with no cross-system anchor.
+        const employee = await prisma.employee.create({
+          data: {
+            firstName: data.firstName,
+            lastName: data.lastName,
+            email: data.email,
+            phone: data.phone || null,
+            workerType: invite.workerType ?? "employee",
+          },
+        });
+        employeeId = employee.id;
+        await prisma.invite.update({
+          where: { id: invite.id },
+          data: { employeeId: employee.id },
+        });
       }
     }
 
