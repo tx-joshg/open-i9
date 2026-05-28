@@ -76,6 +76,7 @@ export async function GET(request: Request) {
         hireDate: emp.hireDate,
         terminatedAt: emp.terminatedAt,
         notes: emp.notes,
+        externalId: emp.externalId,
         createdAt: emp.createdAt,
         updatedAt: emp.updatedAt,
         submissionCount,

@@ -10,6 +10,10 @@ export interface SubmissionRow {
   docChoice: DocChoice;
   status: SubmissionStatus;
   createdAt: string;
+  // Stable cross-system anchor (e.g. NyTex's "NTX-2053"). Lifted to the
+  // top of the response by GET /api/submissions (joined through
+  // Employee.externalId). Null for submissions with no partner anchor.
+  externalId?: string | null;
 }
 
 interface SubmissionsTableProps {
@@ -68,6 +72,11 @@ export default function SubmissionsTable({
     );
   }
 
+  // Hide the External ID column entirely when no row carries a partner
+  // anchor — same approach as the Employees table. Standalone installs
+  // get the original five-column layout.
+  const hasExternalIds = submissions.some((s) => !!s.externalId);
+
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="overflow-x-auto">
@@ -77,6 +86,11 @@ export default function SubmissionsTable({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Name
               </th>
+              {hasExternalIds ? (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  External ID
+                </th>
+              ) : null}
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Submitted
               </th>
@@ -101,6 +115,11 @@ export default function SubmissionsTable({
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {sub.firstName} {sub.lastName}
                 </td>
+                {hasExternalIds ? (
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-700">
+                    {sub.externalId ?? "—"}
+                  </td>
+                ) : null}
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {new Date(sub.createdAt).toLocaleDateString()}
                 </td>

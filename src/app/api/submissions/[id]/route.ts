@@ -31,6 +31,10 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     const submission = await prisma.submission.findUnique({
       where: { id },
+      // Pull externalId from the linked Employee so partner-system
+      // callers (staff-portal sync) can match deterministically without
+      // a second round-trip.
+      include: { employee: { select: { externalId: true } } },
     });
 
     if (!submission) {
@@ -43,6 +47,9 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({
       ...submission,
       ...decryptedPii,
+      // Lift externalId to the top of the response so callers don't
+      // need to dig through .employee. Null when no partner anchor.
+      externalId: submission.employee?.externalId ?? null,
     });
   } catch (err) {
     console.error("Submission fetch error:", err);

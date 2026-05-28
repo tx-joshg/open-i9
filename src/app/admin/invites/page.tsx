@@ -8,6 +8,9 @@ interface Invite {
   token: string;
   emailHint: string | null;
   nameHint: string | null;
+  // Partner-system stable ID (e.g. NyTex's "NTX-2053"). Stamped at
+  // create time; propagates to the linked Employee at submission time.
+  externalId: string | null;
   expiresAt: string;
   usedAt: string | null;
   isRenewal: boolean;
@@ -421,6 +424,14 @@ export default function AdminInvitesPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Name Hint
                   </th>
+                  {/* External ID column shows only when at least one row
+                      has one — standalone installs keep the original
+                      layout. */}
+                  {invites.some((i) => !!i.externalId) ? (
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      External ID
+                    </th>
+                  ) : null}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Email Hint
                   </th>
@@ -444,6 +455,7 @@ export default function AdminInvitesPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {invites.map((invite) => {
                   const status = getInviteStatus(invite);
+                  const showExternalIdCol = invites.some((i) => !!i.externalId);
                   return (
                     <tr key={invite.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -456,6 +468,13 @@ export default function AdminInvitesPage() {
                           </span>
                         )}
                       </td>
+                      {showExternalIdCol ? (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-700">
+                          {invite.externalId ?? (
+                            <span className="text-gray-400">--</span>
+                          )}
+                        </td>
+                      ) : null}
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {invite.emailHint || (
                           <span className="text-gray-400">--</span>
