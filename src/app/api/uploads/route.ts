@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import heicConvert from "heic-convert";
+import { heicToJpeg } from "@/lib/heic";
 import { uploadFile } from "@/lib/storage";
 
 const ALLOWED_TYPES = [
@@ -61,19 +61,20 @@ export async function POST(request: Request) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    let buffer = Buffer.from(arrayBuffer);
+    // Typed as the general Buffer so it can be reassigned to the HEIC→JPEG
+    // result below (whose backing ArrayBuffer type differs under @types/node).
+    let buffer: Buffer = Buffer.from(arrayBuffer);
     let mimeType = file.type;
 
     // Convert HEIC/HEIF → JPEG so browsers (esp Chrome) can render previews
     // in the admin console. Storage layer also rejects HEIC, so this has to
     // happen before uploadFile().
     if (mimeType === "image/heic" || mimeType === "image/heif") {
-      const jpegArrayBuffer = await heicConvert({
-        buffer: arrayBuffer,
-        format: "JPEG",
-        quality: 0.92,
-      });
-      buffer = Buffer.from(jpegArrayBuffer);
+      // Convert via the shared helper, which normalizes input to an
+      // iterable Buffer. Passing a raw ArrayBuffer straight to heic-convert
+      // here is what made PR #16's HEIC support 500 with "Found
+      // non-callable @@iterator" — see src/lib/heic.ts.
+      buffer = await heicToJpeg(buffer);
       mimeType = "image/jpeg";
     }
 
