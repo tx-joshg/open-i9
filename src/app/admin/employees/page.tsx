@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAdmin } from "@/contexts/AdminContext";
+import InviteLinkDialog from "@/components/admin/InviteLinkDialog";
+import { useToast } from "@/components/ui/Toast";
 
 const PAGE_SIZE = 20;
 
@@ -205,6 +207,7 @@ function AddEmployeeForm({
 
 export default function AdminEmployeesPage() {
   const { fetchWithAuth } = useAdmin();
+  const { showToast } = useToast();
   const router = useRouter();
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -213,6 +216,8 @@ export default function AdminEmployeesPage() {
   const [page, setPage] = useState(1);
   const [showAddForm, setShowAddForm] = useState(false);
   const [renewalLoading, setRenewalLoading] = useState<string | null>(null);
+  // Freshly created renewal invite link (null = dialog closed)
+  const [renewalInviteUrl, setRenewalInviteUrl] = useState<string | null>(null);
 
   const loadEmployees = useCallback(async () => {
     setLoading(true);
@@ -257,13 +262,13 @@ export default function AdminEmployeesPage() {
       );
       if (res.ok) {
         const data = await res.json();
-        alert(`Renewal invite created!\n\n${data.inviteUrl}`);
+        setRenewalInviteUrl(data.inviteUrl);
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to send renewal");
+        showToast(data.error || "Failed to send renewal", "error");
       }
     } catch {
-      alert("Failed to send renewal invite");
+      showToast("Failed to send renewal invite", "error");
     } finally {
       setRenewalLoading(null);
     }
@@ -481,6 +486,12 @@ export default function AdminEmployeesPage() {
           </div>
         </div>
       )}
+
+      <InviteLinkDialog
+        inviteUrl={renewalInviteUrl}
+        title="Renewal invite created"
+        onClose={() => setRenewalInviteUrl(null)}
+      />
     </div>
   );
 }
