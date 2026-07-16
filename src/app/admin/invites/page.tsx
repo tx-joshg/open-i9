@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/contexts/AdminContext";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/components/ui/Toast";
 
 interface Invite {
   id: string;
@@ -50,6 +52,7 @@ function StatusBadge({ status }: { status: InviteStatus }) {
 
 export default function AdminInvitesPage() {
   const { fetchWithAuth } = useAdmin();
+  const { showToast } = useToast();
 
   const [invites, setInvites] = useState<Invite[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -70,6 +73,9 @@ export default function AdminInvitesPage() {
   // Generated link
   const [generatedLink, setGeneratedLink] = useState("");
   const [copied, setCopied] = useState(false);
+
+  // Invite pending revoke confirmation (null = dialog closed)
+  const [revokeInviteId, setRevokeInviteId] = useState<string | null>(null);
 
   const loadInvites = useCallback(async () => {
     try {
@@ -170,18 +176,17 @@ export default function AdminInvitesPage() {
   }
 
   async function handleRevoke(id: string) {
-    if (!confirm("Are you sure you want to revoke this invite?")) return;
-
     try {
       const res = await fetchWithAuth(`/api/invites/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: "Failed to revoke" }));
-        alert(body.error || "Failed to revoke invite");
+        showToast(body.error || "Failed to revoke invite", "error");
         return;
       }
+      showToast("Invite revoked.");
       loadInvites();
     } catch {
-      alert("Failed to revoke invite");
+      showToast("Failed to revoke invite", "error");
     }
   }
 
@@ -504,7 +509,7 @@ export default function AdminInvitesPage() {
                               Copy Link
                             </button>
                             <button
-                              onClick={() => handleRevoke(invite.id)}
+                              onClick={() => setRevokeInviteId(invite.id)}
                               className="text-red-600 hover:text-red-800 font-medium"
                             >
                               Revoke
@@ -523,6 +528,20 @@ export default function AdminInvitesPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={revokeInviteId !== null}
+        title="Revoke invite?"
+        message={<p>The invite link will stop working immediately.</p>}
+        confirmLabel="Revoke"
+        confirmTone="red"
+        onConfirm={() => {
+          const id = revokeInviteId;
+          setRevokeInviteId(null);
+          if (id) void handleRevoke(id);
+        }}
+        onCancel={() => setRevokeInviteId(null)}
+      />
     </div>
   );
 }

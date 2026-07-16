@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAdmin } from "@/contexts/AdminContext";
+import InviteLinkDialog from "@/components/admin/InviteLinkDialog";
+import { useToast } from "@/components/ui/Toast";
 
 interface SubmissionSummary {
   id: string;
@@ -71,6 +73,7 @@ function SubmissionStatusBadge({ status }: { status: string }) {
 
 export default function EmployeeDetailPage() {
   const { fetchWithAuth } = useAdmin();
+  const { showToast } = useToast();
   const params = useParams();
   const router = useRouter();
   const employeeId = params.id as string;
@@ -91,6 +94,8 @@ export default function EmployeeDetailPage() {
   const [notes, setNotes] = useState("");
 
   const [renewalLoading, setRenewalLoading] = useState(false);
+  // Freshly created renewal invite link (null = dialog closed)
+  const [renewalInviteUrl, setRenewalInviteUrl] = useState<string | null>(null);
   const [showTerminateForm, setShowTerminateForm] = useState(false);
   const [terminationDate, setTerminationDate] = useState("");
 
@@ -199,13 +204,13 @@ export default function EmployeeDetailPage() {
       );
       if (res.ok) {
         const data = await res.json();
-        alert(`Renewal invite created!\n\n${data.inviteUrl}`);
+        setRenewalInviteUrl(data.inviteUrl);
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to send renewal invite");
+        showToast(data.error || "Failed to send renewal invite", "error");
       }
     } catch {
-      alert("Failed to send renewal invite");
+      showToast("Failed to send renewal invite", "error");
     } finally {
       setRenewalLoading(false);
     }
@@ -560,6 +565,12 @@ export default function EmployeeDetailPage() {
           </table>
         </div>
       </div>
+
+      <InviteLinkDialog
+        inviteUrl={renewalInviteUrl}
+        title="Renewal invite created"
+        onClose={() => setRenewalInviteUrl(null)}
+      />
     </div>
   );
 }

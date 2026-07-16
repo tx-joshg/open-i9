@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAdmin } from "@/contexts/AdminContext";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface PdfFieldInfo {
   name: string;
@@ -92,6 +93,7 @@ export default function I9FormManagementPage() {
 
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmRevertOpen, setConfirmRevertOpen] = useState(false);
 
   const loadFormInfo = useCallback(async () => {
     setLoading(true);
@@ -158,7 +160,7 @@ export default function I9FormManagementPage() {
   }
 
   async function handleRevertToDefault() {
-    if (!confirm("Revert to the bundled default I-9 form? Your uploaded form will be removed.")) return;
+    setConfirmRevertOpen(false);
 
     try {
       const res = await fetchWithAuth("/api/i9-form", {
@@ -283,7 +285,7 @@ export default function I9FormManagementPage() {
           </label>
           {hasCustomForm && (
             <button
-              onClick={handleRevertToDefault}
+              onClick={() => setConfirmRevertOpen(true)}
               className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
             >
               Revert to Default
@@ -390,6 +392,16 @@ export default function I9FormManagementPage() {
           ))}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmRevertOpen}
+        title="Revert to default I-9 form?"
+        message={<p>Your uploaded form will be removed.</p>}
+        confirmLabel="Revert"
+        confirmTone="red"
+        onConfirm={() => void handleRevertToDefault()}
+        onCancel={() => setConfirmRevertOpen(false)}
+      />
     </div>
   );
 }
